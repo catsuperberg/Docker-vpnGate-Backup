@@ -1,5 +1,6 @@
 import time
+import download_configs
 
 while True:
-    print("Bonjour")
-    time.sleep(1)
+    download_configs.main()
+    time.sleep(25)

@@ -1,0 +1,7 @@
+services:
+  vpn_backup:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    shm_size: '256mb'
+    command: ["python", "vpn_backup_daemon.py"]
