@@ -3,27 +3,22 @@ import asyncio
 import asyncping3
 import base64
 import shutil
-import os
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from util.timing_decorator import timing_decorator, async_timing_decorator
 from util.row_as_dict import row_as_dict
-
-import sys
-print(sys.prefix)
-
-work_dir = f"{os.path.dirname(__file__)}/temp"
-download_dir = f"{work_dir}/download_script"
+from common.files import download_dir, CONFIG_FILE_EXTENSION
 
 EXPECTED_FIRST_LINE = '*vpn_servers'
 UNSUPPORTED_FORMAT_FILE = 'ERROR_FORMAT_UNSUPPORTED_FALLBACK_TO_RAW_FILE_FROM_URL'
 VPN_LIST_CSV_FILE = 'VpnList.csv'
 CONFIG_DIRECTORY_NAME = 'OpenVPN'
-CONFIG_FILE_EXTENSION = '.ovpn'
 CONFIG_DIRECTORY_PATH = f"{download_dir}/{CONFIG_DIRECTORY_NAME}"
 
 IP_KEY = 'IP'
 IS_REACHABLE_KEY = 'Reachable'
+BASE64_KEY = 'OpenVPN_ConfigData_Base64'
+TEXT_KEY = 'OpenVPN_Config_File'
 
 INVALID_ROWS = ['*', '']
 
@@ -42,17 +37,30 @@ executor = ThreadPoolExecutor(99)
 
 @timing_decorator
 def main():
-    clear_temp()
-    response, csv_stream, csv_header = open_csv_stream()
-    vpns = asyncio.run(csv_with_reachability_tested(csv_stream, csv_header))
+    try:
+        clear_temp()
+        response, csv_stream, csv_header = open_csv_stream()
+    except:
+        print("Failed to get parsable data")
+        return
 
+    vpns = asyncio.run(csv_with_reachability_tested(csv_stream, csv_header))
+    if(len(vpns) <= 0):
+        print("No vpns found")
+        return
+
+    decode_configs(vpns)
     reachable_vpns = [vpn for vpn in vpns if vpn[IS_REACHABLE_KEY]]
     extract_configs(reachable_vpns)
-    new_header = csv_header + [IS_REACHABLE_KEY]
-    save_csv(new_header, vpns)
+    save_csv(vpns)
     print_result_info(vpns, reachable_vpns)
 
     response.close()
+
+# needed for better compression
+def decode_configs(vpns):
+    for vpn in vpns:
+        vpn[TEXT_KEY] = base64.b64decode(vpn.pop(BASE64_KEY))
 
 def clear_temp():
     dir = Path(download_dir)
@@ -98,13 +106,12 @@ def extract_configs(reachable_vpns):
     executor.map(write_config_content, reachable_vpns)
 
 def write_config_content(vpn):
-    content = base64.b64decode(vpn['OpenVPN_ConfigData_Base64'])
-    with open(f"{CONFIG_DIRECTORY_PATH}/{vpn['CountryShort']}-{vpn['IP']}({vpn['#HostName']})).{CONFIG_FILE_EXTENSION}", "wb") as file:
-        file.write(content)
+    with open(f"{CONFIG_DIRECTORY_PATH}/{vpn['CountryShort']}-{vpn['IP']}({vpn['#HostName']}){CONFIG_FILE_EXTENSION}", "wb") as file:
+        file.write(vpn[TEXT_KEY])
 
 
-def save_csv(new_header, vpns):
-    header_line = ','.join(new_header)
+def save_csv(vpns):
+    header_line = ','.join(vpns[0].keys())
     data_lines = [','.join([str(value) for value in vpn.values()]) for vpn in vpns]
     content = '\n'.join([header_line] + data_lines)
     with open(f"{download_dir}/{VPN_LIST_CSV_FILE}", "w") as file:
