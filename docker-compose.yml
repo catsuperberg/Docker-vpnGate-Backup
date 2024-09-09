@@ -3,5 +3,8 @@ services:
     build:
       context: ./
       dockerfile: Dockerfile
+    volumes:
+    - ${VPN_BACKUP_LOCAL}:/app/backup/local
+    - ${VPN_BACKUP_REMOTE}:/app/backup/remote
     shm_size: '256mb'
     command: ["python", "vpn_backup_daemon.py"]

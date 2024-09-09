@@ -1,6 +1,8 @@
 /app/ram
 /app/ram/scratch
 /app/ram/buffer
+/app/backup/local/*
+/app/backup/remote/*
 
 # Git
 .git

@@ -6,9 +6,11 @@ from common.date_string import get_current_timestemp
 timestamp = get_current_timestemp()
 directory = f"{scratch_dir}/{timestamp} {SITE_POSTFIX}"
 
+
 def main():
     mirror_site()
     return directory
+
 
 def mirror_site():
     shutil.rmtree(directory, ignore_errors=True)
@@ -19,6 +21,7 @@ def mirror_site():
         directory,
     ]
     subprocess.run(command)
+
 
 if __name__ == "__main__":
     main()

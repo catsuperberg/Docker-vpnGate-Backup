@@ -13,18 +13,18 @@ from common.date_string import get_current_timestemp
 timestamp = get_current_timestemp()
 download_dir = f"{scratch_dir}/{timestamp}"
 
-EXPECTED_FIRST_LINE = '*vpn_servers'
-UNSUPPORTED_FORMAT_FILE = 'ERROR_FORMAT_UNSUPPORTED_FALLBACK_TO_RAW_FILE_FROM_URL'
-VPN_LIST_CSV_FILE = 'VpnList.csv'
-CONFIG_DIRECTORY_NAME = 'OpenVPN'
+EXPECTED_FIRST_LINE = "*vpn_servers"
+UNSUPPORTED_FORMAT_FILE = "ERROR_FORMAT_UNSUPPORTED_FALLBACK_TO_RAW_FILE_FROM_URL"
+VPN_LIST_CSV_FILE = "VpnList.csv"
+CONFIG_DIRECTORY_NAME = "OpenVPN"
 CONFIG_DIRECTORY_PATH = f"{download_dir}/{CONFIG_DIRECTORY_NAME}"
 
-IP_KEY = 'IP'
-IS_REACHABLE_KEY = 'Reachable'
-BASE64_KEY = 'OpenVPN_ConfigData_Base64'
-TEXT_KEY = 'OpenVPN_Config_File'
+IP_KEY = "IP"
+IS_REACHABLE_KEY = "Reachable"
+BASE64_KEY = "OpenVPN_ConfigData_Base64"
+TEXT_KEY = "OpenVPN_Config_File"
 
-INVALID_ROWS = ['*', '']
+INVALID_ROWS = ["*", ""]
 
 HEADERS = {
     "Accept": "text/plain",
@@ -49,7 +49,7 @@ def main():
         return rename_to_error()
 
     vpns = asyncio.run(csv_with_reachability_tested(csv_stream, csv_header))
-    if(len(vpns) <= 0):
+    if len(vpns) <= 0:
         print("No vpns found")
         return rename_to_error()
 
@@ -63,10 +63,12 @@ def main():
     executor.shutdown()
     return download_dir
 
+
 # needed for better compression
 def decode_configs(vpns):
     for vpn in vpns:
         vpn[TEXT_KEY] = base64.b64decode(vpn.pop(BASE64_KEY))
+
 
 def create_directory():
     dir = Path(download_dir)
@@ -85,22 +87,26 @@ def open_csv_stream():
     csv_body_stream = response.iter_lines(decode_unicode=True)
     first_line = next(csv_body_stream)
     if first_line != EXPECTED_FIRST_LINE:
-        save_fallback('\n'.join([first_line] + list(csv_body_stream)))
+        save_fallback("\n".join([first_line] + list(csv_body_stream)))
         raise Exception("Unexpected file structure")
 
-    csv_header = next(csv_body_stream).split(',')
+    csv_header = next(csv_body_stream).split(",")
     return response, csv_body_stream, csv_header
 
 
 @async_timing_decorator
 async def csv_with_reachability_tested(stream, header):
-    awaitables = [mark_is_reachable(row, header) for row in stream if row not in INVALID_ROWS]
+    awaitables = [
+        mark_is_reachable(row, header) for row in stream if row not in INVALID_ROWS
+    ]
     return await asyncio.gather(*awaitables)
+
 
 async def mark_is_reachable(row, header):
     data = row_as_dict(row, header)
     data[IS_REACHABLE_KEY] = await ping(data[IP_KEY])
     return data
+
 
 async def ping(ip):
     return isinstance(await asyncping3.ping(ip, timeout=0.5), float)
@@ -111,17 +117,22 @@ def extract_configs(reachable_vpns):
     Path(CONFIG_DIRECTORY_PATH).mkdir(parents=True, exist_ok=True)
     executor.map(write_config_content, reachable_vpns)
 
+
 def write_config_content(vpn):
-    with open(f"{CONFIG_DIRECTORY_PATH}/{vpn['CountryShort']}-{vpn['IP']}({vpn['#HostName']}){CONFIG_FILE_EXTENSION}", "wb") as file:
+    with open(
+        f"{CONFIG_DIRECTORY_PATH}/{vpn['CountryShort']}-{vpn['IP']}({vpn['#HostName']}){CONFIG_FILE_EXTENSION}",
+        "wb",
+    ) as file:
         file.write(vpn[TEXT_KEY])
 
 
 def save_csv(vpns):
-    header_line = ','.join(vpns[0].keys())
-    data_lines = [','.join([str(value) for value in vpn.values()]) for vpn in vpns]
-    content = '\n'.join([header_line] + data_lines)
+    header_line = ",".join(vpns[0].keys())
+    data_lines = [",".join([str(value) for value in vpn.values()]) for vpn in vpns]
+    content = "\n".join([header_line] + data_lines)
     with open(f"{download_dir}/{VPN_LIST_CSV_FILE}", "w") as file:
         file.write(content)
+
 
 def save_fallback(content):
     with open(f"{download_dir}/{UNSUPPORTED_FORMAT_FILE}", "w") as file:
@@ -131,13 +142,16 @@ def save_fallback(content):
 def print_result_info(vpns, reachable_vpns):
     full_config_count = len(vpns)
     reachable_count = len(reachable_vpns)
-    print(f"Downloaded and extracted {reachable_count} out of {full_config_count} vpns in config.\nRest were filtered by pinging IPs.")
+    print(
+        f"Downloaded and extracted {reachable_count} out of {full_config_count} vpns in config.\nRest were filtered by pinging IPs."
+    )
 
 
 def rename_to_error():
     error_name = f"{scratch_dir}/{timestamp} {ERROR_POSTFIX}"
     Path(download_dir).rename(Path(error_name))
     return error_name
+
 
 if __name__ == "__main__":
     main()
