@@ -7,7 +7,11 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from util.timing_decorator import timing_decorator, async_timing_decorator
 from util.row_as_dict import row_as_dict
-from common.files import download_dir, CONFIG_FILE_EXTENSION
+from common.files import scratch_dir, CONFIG_FILE_EXTENSION, ERROR_POSTFIX
+from common.date_string import get_current_timestemp
+
+timestamp = get_current_timestemp()
+download_dir = f"{scratch_dir}/{timestamp}"
 
 EXPECTED_FIRST_LINE = '*vpn_servers'
 UNSUPPORTED_FORMAT_FILE = 'ERROR_FORMAT_UNSUPPORTED_FALLBACK_TO_RAW_FILE_FROM_URL'
@@ -38,16 +42,16 @@ executor = ThreadPoolExecutor(99)
 @timing_decorator
 def main():
     try:
-        clear_temp()
+        create_directory()
         response, csv_stream, csv_header = open_csv_stream()
     except:
         print("Failed to get parsable data")
-        return
+        return rename_to_error()
 
     vpns = asyncio.run(csv_with_reachability_tested(csv_stream, csv_header))
     if(len(vpns) <= 0):
         print("No vpns found")
-        return
+        return rename_to_error()
 
     decode_configs(vpns)
     reachable_vpns = [vpn for vpn in vpns if vpn[IS_REACHABLE_KEY]]
@@ -56,16 +60,18 @@ def main():
     print_result_info(vpns, reachable_vpns)
 
     response.close()
+    executor.shutdown()
+    return download_dir
 
 # needed for better compression
 def decode_configs(vpns):
     for vpn in vpns:
         vpn[TEXT_KEY] = base64.b64decode(vpn.pop(BASE64_KEY))
 
-def clear_temp():
+def create_directory():
     dir = Path(download_dir)
     shutil.rmtree(dir, ignore_errors=True)
-    dir.mkdir(parents=True, exist_ok=True)
+    dir.mkdir(exist_ok=True)
 
 
 @timing_decorator
@@ -127,6 +133,11 @@ def print_result_info(vpns, reachable_vpns):
     reachable_count = len(reachable_vpns)
     print(f"Downloaded and extracted {reachable_count} out of {full_config_count} vpns in config.\nRest were filtered by pinging IPs.")
 
+
+def rename_to_error():
+    error_name = f"{scratch_dir}/{timestamp} {ERROR_POSTFIX}"
+    Path(download_dir).rename(Path(error_name))
+    return error_name
 
 if __name__ == "__main__":
     main()
